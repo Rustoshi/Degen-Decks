@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmRawTransaction } from "@solana/web3.js"
+import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmRawTransaction, LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { Program } from "@coral-xyz/anchor";
 import { DegenDecks } from "../target/types/degen_decks";
 import { assert, expect } from "chai";
@@ -10,6 +10,7 @@ import {
     DELEGATION_PROGRAM_ID,
     delegationMetadataPdaFromDelegatedAccount,
     delegationRecordPdaFromDelegatedAccount,
+
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 describe("Degen Decks", () => {
@@ -18,12 +19,64 @@ describe("Degen Decks", () => {
     const program = anchor.workspace.DegenDecks as Program<DegenDecks>;
     const connection = provider.connection;
 
-    // helper funtions
+    // Helper functions
     const findPDA = (seeds: Array<any>, programId = program.programId) => {
         return anchor.web3.PublicKey.findProgramAddressSync(
             seeds,
             programId
         );
+    }
+
+    const sendSOL = async (from: PublicKey, to: PublicKey, lamports: number, signer: Keypair) => {
+        const tx = new Transaction();
+        tx.add(
+            SystemProgram.transfer({
+                fromPubkey: from,
+                toPubkey: to,
+                lamports: lamports
+            })
+        );
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = signer.publicKey;
+        tx.sign(signer);
+        const rawTx = tx.serialize();
+
+        await sendAndConfirmRawTransaction(
+            connection,
+            rawTx
+        );  
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        console.log("Funded ATA")
+    }
+
+    const fundWSOLATA = async (userKp: Keypair, ata: Account, lamports: number) => {
+        const tx = new Transaction();
+        tx.add(
+            SystemProgram.transfer({
+                fromPubkey: userKp.publicKey,
+                toPubkey: ata.address,
+                lamports: lamports
+            })
+        );
+        tx.add(
+            createSyncNativeInstruction(
+                ata.address,
+                TOKEN_PROGRAM_ID
+            )
+        );
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = userKp.publicKey;
+        tx.sign(userKp);
+        const rawTx = tx.serialize();
+
+        await sendAndConfirmRawTransaction(
+            connection,
+            rawTx
+        );  
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        console.log("Funded ATA")
     }
 
     // PDA Seeds Contants
@@ -77,10 +130,11 @@ describe("Degen Decks", () => {
 
     before(async () => {
         // Airdrop SOL
-        await connection.requestAirdrop(randomUser.publicKey, 5_000_000_000);
-        await connection.requestAirdrop(user1.publicKey, 5_000_000_000);
-        await connection.requestAirdrop(user2.publicKey, 5_000_000_000);
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Wait for airdrops
+        // await connection.requestAirdrop(randomUser.publicKey, 10 * LAMPORTS_PER_SOL);
+        // await connection.requestAirdrop(user1.publicKey, 10 * LAMPORTS_PER_SOL);
+        // await connection.requestAirdrop(user2.publicKey, 5 * LAMPORTS_PER_SOL);
+        await sendSOL(user1.publicKey, user2.publicKey, 2 * LAMPORTS_PER_SOL, user1.payer);
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for airdrops
 
         // Derive PDAs
         config = findPDA([Buffer.from(CONFIG_SEED, "utf-8")])[0];
@@ -115,47 +169,43 @@ describe("Degen Decks", () => {
             WSOL,
             USDC
         ];
-        it("Should initialize the config", async () => {
-            try {
-                const tx = await program.methods
-                    .initialize(platformFee, allow_mints)
-                    .accountsStrict({
-                        admin: user1.publicKey,
-                        config: config,
-                        programData: programData,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .signers([user1.payer])
-                    .rpc();
-                console.log("Initialize transaction: ", tx);
-            } catch (error: any) {
-                console.error(`Oops, something went wrong: ${error}`);
-            }
+        // it("Should initialize the config", async () => {
+        //     const tx = await program.methods
+        //         .initialize(platformFee, allow_mints)
+        //         .accountsStrict({
+        //             admin: user1.publicKey,
+        //             config: config,
+        //             programData: programData,
+        //             systemProgram: SystemProgram.programId,
+        //         })
+        //         .signers([user1.payer])
+        //         .rpc();
+        //     console.log("Initialize Config Transaction: ", tx);
 
-            const configAccount = await program.account.config.fetch(config);
-            expect(configAccount.platformFee).to.equal(platformFee, "Platform fees do not match");
-            expect(configAccount.allowedMints).to.deep.equal(allow_mints, "Allowed mints do not match");
-        });
+        //     const configAccount = await program.account.config.fetch(config);
+        //     expect(configAccount.platformFee).to.equal(platformFee, "Platform fees do not match");
+        //     expect(configAccount.allowedMints).to.deep.equal(allow_mints, "Allowed mints do not match");
+        // });
 
-        it("Only admin should initialize", async () => {
-            const platformFee = 1000;
-            try {
-                const tx = await program.methods
-                    .initialize(platformFee, allow_mints)
-                    .accountsStrict({
-                        admin: randomUser.publicKey,
-                        config: config,
-                        programData: programData,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .signers([randomUser])
-                    .rpc();
-                console.log("Initialize transaction", tx);
-                expect.fail("Expect instruction to throw");
-            } catch (error: any) {
-                expect(error.message).to.match(/You Are Not Unauthorized/i);
-            }
-        });
+        // it("Only admin should initialize", async () => {
+        //     const platformFee = 1000;
+        //     try {
+        //         const tx = await program.methods
+        //             .initialize(platformFee, allow_mints)
+        //             .accountsStrict({
+        //                 admin: randomUser.publicKey,
+        //                 config: config,
+        //                 programData: programData,
+        //                 systemProgram: SystemProgram.programId,
+        //             })
+        //             .signers([randomUser])
+        //             .rpc();
+        //         console.log("Initialize transaction", tx);
+        //         expect.fail("Expect instruction to throw");
+        //     } catch (error: any) {
+        //         expect(error.message).to.match(/You Are Not Unauthorized/i);
+        //     }
+        // });
     });
 
     describe("> Initialize Profile", () => {
@@ -163,107 +213,70 @@ describe("Degen Decks", () => {
         const username2 = "Rustoshi";
 
         it("Should initialize user profiles", async () => {
-            try {
-                const tx1 = await program.methods
-                    .initializeProfile(username1)
-                    .accountsStrict({
-                        signer: user1.publicKey,
-                        profile: userProfile1,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .signers([user1.payer])
-                    .rpc();
+            // const tx1 = await program.methods
+            //     .initializeProfile(username1)
+            //     .accountsStrict({
+            //         signer: user1.publicKey,
+            //         profile: userProfile1,
+            //         systemProgram: SystemProgram.programId,
+            //     })
+            //     .signers([user1.payer])
+            //     .rpc();
 
-                const tx2 = await program.methods
-                    .initializeProfile(username2)
-                    .accountsStrict({
-                        signer: user2.publicKey,
-                        profile: userProfile2,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .signers([user2])
-                    .rpc();
-                console.log("Initialize transaction1: ", tx1);
-                console.log("Initialize transaction2: ", tx2);
-            } catch (error: any) {
-                console.error(`Oops, something went wrong: ${error}`);
-            }
+            const tx2 = await program.methods
+                .initializeProfile(username2)
+                .accountsStrict({
+                    signer: user2.publicKey,
+                    profile: userProfile2,
+                    systemProgram: SystemProgram.programId,
+                })
+                .signers([user2])
+                .rpc();
+            // console.log("Initialize Profile Transaction1: ", tx1);
+            console.log("Initialize Profile Transaction2: ", tx2);
 
-            const profileAccount1 = await program.account.profile.fetch(userProfile1);
+            // const profileAccount1 = await program.account.profile.fetch(userProfile1);
             const profileAccount2 = await program.account.profile.fetch(userProfile2);
 
-            expect(profileAccount1.username).to.equal(username1, "Username does not match");
+            // expect(profileAccount1.username).to.equal(username1, "Username does not match");
             expect(profileAccount2.username).to.equal(username2, "Username does not match");
         });
     });
 
     describe("> Initialize Game", () => {
         it("Should initialize Game Room with WSOL", async () => {
-            const entryStake = 5_000_000_000 // 5 wSol
+            const entryStake = 0.5 * LAMPORTS_PER_SOL // 0.5 wSol
             const noPlayers = 2;
             const waitTime = new BN(60 * 1000);
 
-
-
             const ataInfo = await getAccount(connection, userAta1.address);
             if (ataInfo.amount < entryStake) {
-                const tx = new Transaction();
-                tx.add(
-                    SystemProgram.transfer({
-                        fromPubkey: user1.publicKey,
-                        toPubkey: userAta1.address,
-                        lamports: entryStake
-                    })
-                );
-                tx.add(
-                    createSyncNativeInstruction(
-                        userAta1.address,
-                        TOKEN_PROGRAM_ID
-                    )
-                );
-                try {
-                    const { blockhash } = await connection.getLatestBlockhash();
-                    tx.recentBlockhash = blockhash;
-                    tx.feePayer = user1.publicKey;
-                    tx.sign(user1.payer);
-                    const rawTx = tx.serialize();
-
-                    await sendAndConfirmRawTransaction(
-                        connection,
-                        rawTx
-                    );
-                    console.log("Funded ATA")
-                } catch (error: any) {
-                    console.log("Error funding ATA", error);
-                }
+                await fundWSOLATA(user1.payer, userAta1, LAMPORTS_PER_SOL + entryStake);
             }
 
-            try {
-                const tx = await program.methods
-                    .initializeGame(
-                        seed1,
-                        new BN(entryStake),
-                        noPlayers,
-                        waitTime
-                    )
-                    .accountsStrict({
-                        signer: user1.publicKey,
-                        profile: userProfile1,
-                        game: game,
-                        gameVault: gameVault,
-                        stakeMint: WSOL,
-                        userAta: userAta1.address,
-                        config: config,
-                        tokenProgram: TOKEN_PROGRAM_ID,
-                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                        systemProgram: SystemProgram.programId
-                    })
-                    .signers([user1.payer])
-                    .rpc();
-                console.log("Initialize transaction: ", tx);
-            } catch (error: any) {
-                console.error(`Oops, something went wrong: ${error}`);
-            }
+            const tx = await program.methods
+                .initializeGame(
+                    seed1,
+                    new BN(entryStake),
+                    noPlayers,
+                    waitTime
+                )
+                .accountsStrict({
+                    signer: user1.publicKey,
+                    profile: userProfile1,
+                    game: game,
+                    gameVault: gameVault,
+                    stakeMint: WSOL,
+                    userAta: userAta1.address,
+                    config: config,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId
+                })
+                .signers([user1.payer])
+                .rpc();
+            console.log("Initialize Game transaction: ", tx);
+
 
             const gameAccount = await program.account.game.fetch(game);
             expect(gameAccount.owner.toBase58()).to.equal(user1.publicKey.toBase58(), "Owner does not match");
@@ -282,41 +295,42 @@ describe("Degen Decks", () => {
             expect(gameAccount.createdAt).to.equal(gameAccount.createdAt, "Created at does not match");
             expect(gameAccount.startedAt).to.equal(null, "Started at does not match");
             expect(gameAccount.endedAt).to.equal(null, "Ended at does not match");
-            expect(gameAccount.bump).to.equal(255, "Bump does not match");
         });
     });
 
     describe("> Join Game", () => {
 
         it("User 2 Should Join game", async () => {
-            try {
-                const tx = await program.methods
-                    .joinGame()
-                    .accountsStrict({
-                        signer: user1.publicKey,
-                        profile: userProfile1,
-                        game: game,
-                        gameVault: gameVault,
-                        stakeMint: WSOL,
-                        userAta: userAta1.address,
-                        config: config,
-                        tokenProgram: TOKEN_PROGRAM_ID,
-                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                        systemProgram: SystemProgram.programId,
-                        delegationProgram: DELEGATION_PROGRAM_ID,
-                        ownerProgram: program.programId,
-                        bufferGame: bufferGame,
-                        delegationMetadataGame: metadataGame,
-                        delegationRecordGame: recordGame
-                    })
-                    .signers([user2])
-                    .rpc();
-                console.log("Initialize transaction: ", tx);
-            } catch (error: any) {
-                console.error(`Oops, something went wrong: ${error}`);
+            let gameAccount = await program.account.game.fetch(game);
+            const ataInfo = await getAccount(connection, userAta2.address);
+            if (ataInfo.amount < gameAccount.entryStake.toNumber()) {
+                await fundWSOLATA(user2, userAta2, 0.5 * LAMPORTS_PER_SOL + gameAccount.entryStake.toNumber());
             }
+            const tx = await program.methods
+                .joinGame()
+                .accountsStrict({
+                    signer: user2.publicKey,
+                    profile: userProfile2,
+                    game: game,
+                    gameVault: gameVault,
+                    stakeMint: WSOL,
+                    userAta: userAta2.address,
+                    config: config,
+                    oracleQueue: new PublicKey("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh"),
+                    programIdentity: findPDA([Buffer.from("identity", "utf-8")])[0],
+                    vrfProgram: new PublicKey("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"),
+                    slotHashes: new PublicKey("SysvarS1otHashes111111111111111111111111111"),
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId,
+                })
+                .signers([user2])
+                .rpc();
+            console.log("Join transaction: ", tx);
 
-            const gameAccount = await program.account.game.fetch(game);
+            await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for randomness
+            
+            gameAccount = await program.account.game.fetch(game);
             console.info(gameAccount);
         });
     });

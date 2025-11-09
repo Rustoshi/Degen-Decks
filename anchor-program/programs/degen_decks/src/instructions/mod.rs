@@ -9,3 +9,6 @@ pub use initialize_game::*;
 
 pub mod join_game;
 pub use join_game::*;
+
+pub mod consume_randomness;
+pub use consume_randomness::*;

@@ -1,0 +1,36 @@
+[2025-11-08--17-46-50 INFO actix_server::builder] starting 5 workers
+[2025-11-08--17-46-50 INFO actix_server::server] Tokio runtime found; starting in existing Tokio runtime
+[2025-11-08--17-46-50 INFO actix_server::server] starting service: "actix-web-service-127.0.0.1:18488", workers: 5, listening on: 127.0.0.1:18488
+[2025-11-08--17-46-51 INFO parity_ws] Listening for new connections on 127.0.0.1:8900.
+[2025-11-08--17-46-53 INFO txtx::svm::deploy_program] [Recovery Instructions] - An ephemeral authority account will be created and funded to write to the buffer account.
+[2025-11-08--17-46-53 INFO txtx::svm::deploy_program] [Recovery Instructions] - Please save the following information in case the deployment fails and the account needs to be recovered:
+[2025-11-08--17-46-53 INFO txtx::svm::deploy_program] [Recovery Instructions] - Ephemeral authority public key: Dnf2JLpaKafpjdQBxcLfmXXcN44vj4se2PfG14zD5X4F
+[2025-11-08--17-46-53 INFO txtx::svm::deploy_program] [Recovery Instructions] - Ephemeral authority secret key: [41, 181, 164, 54, 90, 244, 203, 173, 248, 218, 23, 206, 157, 53, 22, 48, 136, 167, 150, 36, 121, 199, 174, 60, 211, 218, 152, 108, 165, 230, 119, 133, 189, 254, 95, 32, 55, 199, 229, 106, 51, 155, 172, 90, 106, 132, 40, 19, 127, 168, 155, 133, 12, 17, 192, 60, 42, 141, 193, 80, 29, 209, 14, 180]
+[2025-11-08--17-46-54 INFO txtx::svm::deploy_program] Account Created - Ephemeral authority account created and funded to write to buffer
+[2025-11-08--17-46-54 INFO txtx::svm::deploy_program] [Recovery Instructions] - Creating program buffer account at pubkey 9m4XBJDFuNFZu8QatkMS59iDqf25jeDrtouDvsyqM5G8
+[2025-11-08--17-46-55 INFO txtx::svm::deploy_program] Account Created - Program buffer account created
+[2025-11-08--17-47-06 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:41788.
+[2025-11-08--17-47-13 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:53740.
+[2025-11-08--17-47-14 INFO txtx::svm::deploy_program] Buffer Ready - Writing to buffer account is complete
+[2025-11-08--17-47-14 ERROR txtx::svm::send_transaction] Failed - Failed to broadcast transaction
+[2025-11-08--17-47-14 ERROR txtx::svm::send_transaction] Failed - error: unable to send and confirm transaction (RPC response error -32002: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0: 3 log messages:
+Program 11111111111111111111111111111111 invoke [1]
+Create Account: account Address { address: HjEFHo24qf3iiP2n8DEVJyKBkoBG5AUvxDPVzRiyPL5T, base: None } already in use
+Program 11111111111111111111111111111111 failed: custom program error: 0x0; 3 log messages:
+  Program 11111111111111111111111111111111 invoke [1]
+  Create Account: account Address { address: HjEFHo24qf3iiP2n8DEVJyKBkoBG5AUvxDPVzRiyPL5T, base: None } already in use
+  Program 11111111111111111111111111111111 failed: custom program error: 0x0
+)
+[2025-11-08--17-47-18 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58558.
+[2025-11-08--17-47-20 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58568.
+[2025-11-08--17-47-21 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58578.
+[2025-11-08--17-47-21 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58592.
+[2025-11-08--17-47-22 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58598.
+[2025-11-08--17-47-23 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58614.
+[2025-11-08--17-47-26 INFO parity_ws::io] Accepted a new tcp connection from 127.0.0.1:58624.
+[2025-11-08--22-03-55 INFO actix_server::worker] shutting down idle worker
+[2025-11-08--22-03-55 INFO actix_server::worker] shutting down idle worker
+[2025-11-08--22-03-55 INFO actix_server::worker] shutting down idle worker
+[2025-11-08--22-03-55 INFO actix_server::worker] shutting down idle worker
+[2025-11-08--22-03-55 INFO actix_server::accept] accept thread stopped
+[2025-11-08--22-03-55 INFO actix_server::worker] shutting down idle worker

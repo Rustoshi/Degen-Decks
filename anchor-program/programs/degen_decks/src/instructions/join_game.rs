@@ -1,19 +1,20 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::{delegate};
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
-
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{ Mint, TokenInterface, TokenAccount }
 };
-use crate::constants::{
+use crate::{constants::{
     CONFIG_SEED, GAME_SEED, PROFILE_SEED
-};
+}, instruction::ConsumeRandomness};
 use crate::errors::GameErrors;
 use crate::state::{Game, Config, Player, Profile};
 use crate::utils::spl_transfer;
+use ephemeral_vrf_sdk::anchor::vrf;
+use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
+use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-#[delegate]
+
+#[vrf]
 #[derive(Accounts)]
 pub struct JoinGame<'info> {
     #[account(mut)]
@@ -28,11 +29,10 @@ pub struct JoinGame<'info> {
     pub profile: Account<'info, Profile>,
     #[account(
         mut,
-        del,
         seeds = [
             &GAME_SEED.as_bytes(), 
             game.seed.to_le_bytes().as_ref(), 
-            signer.key().as_ref()
+            game.owner.as_ref()
             ],
         bump = game.bump
     )]
@@ -62,6 +62,9 @@ pub struct JoinGame<'info> {
         bump = config.bump
     )]
     pub config: Account<'info, Config>,
+    /// CHECK: The oracle queue
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -101,27 +104,34 @@ impl<'info> JoinGame<'info> {
             self.token_program.to_account_info(), 
             self.game.entry_stake, 
             None
-        )?;
-
-        // delegate game state if players are complete
-        if self.game.players.len() == self.game.no_players as usize {
-            self.game.delegated = true;
-            self.delegate_game(
-                &self.signer,
-                &[GAME_SEED.as_bytes(), 
-                self.game.seed.to_le_bytes().as_ref(), 
-                self.signer.key().as_ref()
-                ],
-                DelegateConfig::default()
-            )?;
-            Ok(())
-        }else {
-            Ok(())
-        }
+        )
     }
 
-    // pub fn request_randomness(&mut self) -> Result<()> {
-        
-    // }
+    pub fn request_randomness(&mut self) -> Result<()> {
+        self.game.started = true;
+        self.game.started_at = Some(Clock::get().unwrap().unix_timestamp);
+        // request randomness
+        let ix = create_request_randomness_ix(
+            RequestRandomnessParams {
+                payer: self.signer.key(),
+                oracle_queue: self.oracle_queue.key(),
+                callback_program_id: crate::ID,
+                callback_discriminator: ConsumeRandomness::DISCRIMINATOR.to_vec(),
+                caller_seed: [5; 32],
+                accounts_metas: Some(
+                    vec![
+                        SerializableAccountMeta {
+                            pubkey: self.game.key(),
+                            is_signer: false,
+                            is_writable: true
+                        }
+                    ]
+                ),
+                ..Default::default()
+            }
+        );
+        self.invoke_signed_vrf(&self.signer.to_account_info(), &ix)?;
+        Ok(())
+    }
 
 }

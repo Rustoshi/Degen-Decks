@@ -36,6 +36,14 @@ pub mod degen_decks {
 
     pub fn join_game(ctx: Context<JoinGame>) -> Result<()> {
         ctx.accounts.join_game()?;
-        ctx.accounts.deposit_stake()
+        ctx.accounts.deposit_stake()?;
+        if ctx.accounts.game.players.len() == ctx.accounts.game.no_players as usize {
+            ctx.accounts.request_randomness()?;
+        }
+        Ok(())
+    }
+
+    pub fn consume_randomness(ctx: Context<ConsumeRandomness>, randomness: [u8; 32]) -> Result<()> {
+        ctx.accounts.consume_randomness(randomness)
     }
 }
