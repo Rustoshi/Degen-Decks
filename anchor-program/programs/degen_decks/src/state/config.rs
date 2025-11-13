@@ -5,7 +5,8 @@ use crate::constants::MAX_MINTS_LENGTH;
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
-    pub platform_fee: u16,
+    pub platform_fee: u16, // fee in basis points
+    pub fee_wallet: Pubkey,
     #[max_len(MAX_MINTS_LENGTH)]
     pub allowed_mints: Vec<Pubkey>,
     pub bump: u8

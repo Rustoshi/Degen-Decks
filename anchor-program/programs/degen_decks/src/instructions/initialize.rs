@@ -15,6 +15,8 @@ pub struct Initialize<'info> {
         bump
     )]
     pub config: Account<'info, Config>,
+    /// CHECK: fee wallet 
+    pub fee_wallet: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     // Making sure only the program update authority can add creators to the array
     #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ConfigErrors::NotAuthorized)]
@@ -36,6 +38,7 @@ impl<'info> Initialize<'info> {
             Config {
                 allowed_mints,
                 platform_fee,
+                fee_wallet: self.fee_wallet.key(),
                 bump
             }
         );

@@ -8,7 +8,7 @@ pub struct InitializeProfile<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
-        init,
+        init_if_needed,
         payer = signer,
         space = Profile::DISCRIMINATOR.len() + Profile::INIT_SPACE,
         seeds = [&PROFILE_SEED.as_bytes(), signer.key().as_ref()],

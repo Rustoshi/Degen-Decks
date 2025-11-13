@@ -6,8 +6,8 @@ solana_version = "2.1.0"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-degen_decks = "HjEFHo24qf3iiP2n8DEVJyKBkoBG5AUvxDPVzRiyPL5T"
+[programs.devnet]
+degen_decks = "CbaL3PXSRNqSacTG88KAuH3QWzxaTvc8sbtXVjpdihYj"
 
 [registry]
 url = "https://api.apr.dev"

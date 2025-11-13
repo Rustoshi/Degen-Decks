@@ -90,7 +90,8 @@ impl<'info> JoinGame<'info> {
             owner: self.signer.key(),
             username: self.profile.username.to_owned(),
             hand: None,
-            player_index: None
+            player_index: None,
+            card_count: None
         };
         self.game.players.push(player_account);
         Ok(())
@@ -108,8 +109,6 @@ impl<'info> JoinGame<'info> {
     }
 
     pub fn request_randomness(&mut self) -> Result<()> {
-        self.game.started = true;
-        self.game.started_at = Some(Clock::get().unwrap().unix_timestamp);
         // request randomness
         let ix = create_request_randomness_ix(
             RequestRandomnessParams {
@@ -133,5 +132,4 @@ impl<'info> JoinGame<'info> {
         self.invoke_signed_vrf(&self.signer.to_account_info(), &ix)?;
         Ok(())
     }
-
 }

@@ -95,6 +95,7 @@ impl<'info> InitializeGame<'info> {
             owner: self.signer.key(),
             username: self.profile.username.to_owned(),
             hand: None,
+            card_count: None,
             player_index: None
         };
 
@@ -120,6 +121,7 @@ impl<'info> InitializeGame<'info> {
                 created_at: clock.unix_timestamp,
                 started_at: None,
                 ended_at: None,
+                last_move_time: None,
                 bump
             }
         );

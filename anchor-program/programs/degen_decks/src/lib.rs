@@ -9,8 +9,10 @@ pub mod events;
 pub mod utils;
 
 pub use instructions::*;
+use crate::state::Card;
 
-declare_id!("HjEFHo24qf3iiP2n8DEVJyKBkoBG5AUvxDPVzRiyPL5T");
+
+declare_id!("CbaL3PXSRNqSacTG88KAuH3QWzxaTvc8sbtXVjpdihYj");
 
 #[ephemeral]
 #[program]
@@ -43,7 +45,22 @@ pub mod degen_decks {
         Ok(())
     }
 
+    pub fn exit_game(ctx: Context<ExitGame>) -> Result<()> {
+        ctx.accounts.exit_game()?;
+        ctx.accounts.withdraw_stake()
+    }
+
+    pub fn play_card(ctx: Context<PlayCard>, card: Card) -> Result<()> {
+        ctx.accounts.play_card(card)
+    }
+
+    pub fn penalize_opponent(ctx: Context<PenalizeOpponent>) -> Result<()> {
+        ctx.accounts.penalize_opponent()
+    }
+
     pub fn consume_randomness(ctx: Context<ConsumeRandomness>, randomness: [u8; 32]) -> Result<()> {
         ctx.accounts.consume_randomness(randomness)
     }
+
+
 }

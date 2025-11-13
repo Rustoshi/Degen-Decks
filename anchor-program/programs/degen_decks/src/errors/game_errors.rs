@@ -13,5 +13,25 @@ pub enum GameErrors{
     #[msg("Players must be between 2 - 5")]
     InvalidNoPlayers,
     #[msg("Players are already complete")]
-    PlayersAlreadyComplete
+    PlayersAlreadyComplete,
+    #[msg("Not your turn")]
+    NotYourTurn,
+    #[msg("Cannot play this card")]
+    CannotPlayCard,
+    #[msg("No call card to validate")]
+    NoCallCard,
+    #[msg("No draw pile")]
+    NoDrawPile,
+    #[msg("Player not found")]
+    PlayerNotFound,
+    #[msg("Game not started")]
+    GameNotStarted,
+    #[msg("Game ended")]
+    GameEnded,
+    #[msg("Game not ended")]
+    GameNotEnded,
+    #[msg("You are not the winner")]
+    YouAreNotWinner,
+    #[msg("Cannot penalize yourself")]
+    CannotPenalizeYourself,
 }

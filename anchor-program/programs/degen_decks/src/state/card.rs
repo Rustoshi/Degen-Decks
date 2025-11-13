@@ -1,8 +1,13 @@
 use anchor_lang::prelude::*;
 
-#[derive(InitSpace, AnchorDeserialize, AnchorSerialize, Clone)]
+#[derive(InitSpace, AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug, PartialEq)]
 pub struct Card {
-    id: u8,
-    card_number: u8,
-    sub_number: u8
+    pub id: u8,
+    pub card_number: u8
+}
+
+impl Default for Card {
+    fn default() -> Self {
+        Card {id: 0, card_number: 0}
+    }
 }
