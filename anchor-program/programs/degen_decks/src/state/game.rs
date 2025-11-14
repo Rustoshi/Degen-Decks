@@ -34,6 +34,8 @@ impl Game {
     pub fn handle_call_card(&mut self) -> Result<()> {
         let call_card = self.call_card.as_ref().ok_or(GameErrors::NoCallCard)?;
 
+        // update last move time
+        self.last_move_time = Some(Clock::get().unwrap().unix_timestamp);
         if call_card.card_number == 1 {
             self.handle_hold_on()
         } else if call_card.card_number == 2 {
@@ -41,7 +43,7 @@ impl Game {
         } else if call_card.card_number == 5 {
             self.handle_pick_3()
         } else if call_card.card_number == 8 {
-            self.handle_hold_on()
+            self.handle_suspension()
         } else if call_card.card_number == 14 {
             self.handle_general_market()
         } else if call_card.card_number == 20 {
@@ -53,31 +55,31 @@ impl Game {
 
     pub fn validate_play(&mut self, card: &Card) -> Result<()> {
         let call_card = self.call_card.as_ref().ok_or(GameErrors::NoCallCard)?;
+        // get current player
+        let player_index = (self.player_turn - 1) as usize;
+        let player = &mut self.players[player_index];
 
         // check if the card is valid
-        if card.id != call_card.id && card.card_number != call_card.card_number {
-            return err!(GameErrors::CannotPlayCard);
-        } else {
-            // get current player
-            let player_index = (self.player_turn - 1) as usize;
-            let player = &mut self.players[player_index];
+        // if the call card ID is 1 and user is curent player, they can
+        // play any card
+        if card.id == call_card.id || card.card_number == call_card.card_number {
             // remove card from current player's hand
             if let Some(ref mut hand) = player.hand {
                 hand.retain(|c| c != card);
                 // update call card
                 self.call_card = Some(card.clone());
-                // check is player has checked up
-                if hand.is_empty() {
-                    self.handle_checkup();
-                }
-
                 return Ok(());
             }
-            return Ok(());
+            return err!(GameErrors::CannotPlayCard);
+        } else {
+            return err!(GameErrors::CannotPlayCard);
         }
     }
 
     pub fn check_winner(&mut self) -> Result<()> {
+        if self.ended {
+            return err!(GameErrors::GameEnded);
+        }
         // check if player hand is empty or market has finished
         let player_index = (self.player_turn - 1) as usize;
         let player = &mut self.players[player_index];
@@ -86,27 +88,23 @@ impl Game {
         if let Some(ref mut hand) = player.hand {
             if hand.is_empty() {
                 self.handle_checkup();
+                return Ok(());
             }
-            return Ok(());
         }
 
         // second check if market has finished
         if let Some(ref mut draw_pile) = self.draw_pile {
             if draw_pile.is_empty() {
                 self.handle_market_finish();
+                return Ok(());
             }
-            return Ok(());
         }
 
         return Ok(());
     }
 
-    pub fn next_turn(&mut self) {
-        if self.player_turn >= self.no_players {
-            self.player_turn = 1;
-        } else {
-            self.player_turn += 1;
-        }
+    pub fn next_turn(&mut self, step: u8) {
+        self.player_turn = ((self.player_turn - 1 + step) % self.no_players) + 1;
     }
 
     pub fn handle_draw_from_pile(&mut self) -> Result<()> {
@@ -120,36 +118,34 @@ impl Game {
             if let Some(ref mut hand) = player.hand {
                 hand.push(card);
             }
-            // check if draw pile has been exhausted
-            // if draw_pile.len() == 0 {
-            //     self.handle_market_finish();
-            // } else {
-            //     self.next_turn();
-            // }
+            self.check_winner()?;
+            if self.ended {
+                return Ok(());
+            }
+            self.next_turn(1);
+            return Ok(());
         } else {
             return err!(GameErrors::NoDrawPile);
         }
-        Ok(())
     }
 
     pub fn handle_neutral_play(&mut self) -> Result<()> {
-        self.next_turn();
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
+        self.next_turn(1);
         Ok(())
     }
 
     pub fn handle_pick_2(&mut self) -> Result<()> {
-        let next_player_index = if self.player_turn == self.no_players {
-            0
-        } else {
-            self.player_turn as usize
-        };
-
+        let player_to_pick_index = (self.player_turn % self.no_players) as usize;
 
         if let Some(ref mut draw_pile) = self.draw_pile {
             // remove 2 cards from draw pile
             // add to next player's hand
-            let next_player = self.players.get_mut(next_player_index).unwrap();
-            if let Some(ref mut hand) = next_player.hand {
+            let player_to_pick = self.players.get_mut(player_to_pick_index).unwrap();
+            if let Some(ref mut hand) = player_to_pick.hand {
                 if draw_pile.len() > 2 {
                     for _i in 0..2 {
                         let card = draw_pile.pop().unwrap();
@@ -162,25 +158,25 @@ impl Game {
                     }
                 }
             }
+        } else {
+            return err!(GameErrors::NoDrawPile);
         }
-
-
-        Ok(())
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
+        self.next_turn(2);
+        return Ok(());
     }
 
     pub fn handle_pick_3(&mut self) -> Result<()> {
-        let next_player_index = if self.player_turn == self.no_players {
-            0
-        } else {
-            self.player_turn as usize
-        };
-
+        let player_to_pick_index = (self.player_turn % self.no_players) as usize;
 
         if let Some(ref mut draw_pile) = self.draw_pile {
             // remove 3 cards from draw pile
             // add to next player's hand
-            let next_player = self.players.get_mut(next_player_index).unwrap();
-            if let Some(ref mut hand) = next_player.hand {
+            let player_to_pick = self.players.get_mut(player_to_pick_index).unwrap();
+            if let Some(ref mut hand) = player_to_pick.hand {
                 if draw_pile.len() > 3 {
                     for _i in 0..3 {
                         let card = draw_pile.pop().unwrap();
@@ -193,24 +189,31 @@ impl Game {
                     }
                 }
             }
+        } else {
+            return err!(GameErrors::NoDrawPile);
         }
-
-        Ok(())
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
+        self.next_turn(2);
+        return Ok(());
     }
 
     pub fn handle_suspension(&mut self) -> Result<()> {
-        let mut next_turn = (self.player_turn as usize + 2) % self.no_players as usize;
-
-        if next_turn == 0 {
-            next_turn = self.no_players as usize;
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
         }
-
-        self.player_turn = next_turn as u8;
-
+        self.next_turn(2);
         Ok(())
     }
 
     pub fn handle_hold_on(&mut self) -> Result<()> {
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
         Ok(())
     }
 
@@ -220,7 +223,7 @@ impl Game {
 
         // Calculate number of players that should draw (excluding current player)
         let total_players = self.no_players as usize;
-        let mut player_index = (self.player_turn as usize) % total_players;
+        let mut player_index = (self.player_turn - 1) as usize;
 
         // Continue distributing cards until pile is exhausted or all eligible players have received one
         for _ in 0..(total_players - 1) {
@@ -242,10 +245,18 @@ impl Game {
             }
         }
 
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
         Ok(())
     }
 
     pub fn handle_need(&mut self) -> Result<()> {
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
         Ok(())
     }
 
@@ -345,8 +356,11 @@ impl Game {
             hand.push(card);
         }
 
-        // Move to next player's turn
-        self.next_turn();
+        self.check_winner()?;
+        if self.ended {
+            return Ok(());
+        }
+        self.next_turn(1);
 
         Ok(())
     }

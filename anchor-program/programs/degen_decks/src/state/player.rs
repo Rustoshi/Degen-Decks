@@ -10,4 +10,5 @@ pub struct Player {
     pub hand: Option<Vec<Card>>,
     pub card_count: Option<u8>,
     pub player_index: Option<u8>,
+    pub claimed: bool
 }

@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-degen_decks = "CbaL3PXSRNqSacTG88KAuH3QWzxaTvc8sbtXVjpdihYj"
+degen_decks = "3yCuDBRGcJfmVLJFr7USp9eqF4hYEKLfwqbkf1xqnFXh"
 
 [registry]
 url = "https://api.apr.dev"

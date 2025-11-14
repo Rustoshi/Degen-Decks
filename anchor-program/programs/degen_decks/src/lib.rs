@@ -12,7 +12,9 @@ pub use instructions::*;
 use crate::state::Card;
 
 
-declare_id!("CbaL3PXSRNqSacTG88KAuH3QWzxaTvc8sbtXVjpdihYj");
+
+declare_id!("3yCuDBRGcJfmVLJFr7USp9eqF4hYEKLfwqbkf1xqnFXh");
+
 
 #[ephemeral]
 #[program]
@@ -54,12 +56,32 @@ pub mod degen_decks {
         ctx.accounts.play_card(card)
     }
 
+    pub fn play_card_delegate(ctx: Context<PlayCardDelegate>, card: Card) -> Result<()> {
+        ctx.accounts.play_card_delegate(card)
+    }
+
+    pub fn draw_from_pile(ctx: Context<DrawFromPile>) -> Result<()> {
+        ctx.accounts.draw_from_pile()
+    }
+
+    pub fn draw_from_pile_delegate(ctx: Context<DrawFromPileDelegate>) -> Result<()> {
+        ctx.accounts.draw_from_pile_delegate()
+    }
+
     pub fn penalize_opponent(ctx: Context<PenalizeOpponent>) -> Result<()> {
         ctx.accounts.penalize_opponent()
     }
 
+    pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {
+        ctx.accounts.claim_prize()
+    }
+
     pub fn consume_randomness(ctx: Context<ConsumeRandomness>, randomness: [u8; 32]) -> Result<()> {
         ctx.accounts.consume_randomness(randomness)
+    }
+
+    pub fn commit_game(ctx: Context<CommitGame>) -> Result<()> {
+        ctx.accounts.commit_game()
     }
 
 

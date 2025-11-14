@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_vrf_sdk;
 
-use crate::constants::{GAME_SEED};
+use crate::constants::{GAME_SEED, NO_SHARED_CARDS};
 use crate::state::{Game};
 use crate::utils::shuffle_cards;
 
@@ -32,7 +32,7 @@ impl<'info> ConsumeRandomness<'info> {
         let shuffled_cards = shuffle_cards(rnd_u64);
 
         let num_players = self.game.no_players as usize;
-        let cards_per_player = 5;
+        let cards_per_player = NO_SHARED_CARDS as usize;
         let total_to_share = num_players * cards_per_player;
 
         //slice out the part of the deck for sharing

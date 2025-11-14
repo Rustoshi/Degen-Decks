@@ -10,6 +10,7 @@ pub const MIN_WAIT_TIME: i64 = 30; // 30 seconds
 pub const MAX_WAIT_TIME: i64 = 120; // 2 minutes
 pub const MIN_NO_PLAYERS: u8 = 2;
 pub const MAX_NO_PLAYERS: u8 = 5;
+pub const NO_SHARED_CARDS: u8 = 2;
 
 // CARDS
 pub const CIRCLE: [u8; 12] = [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14];

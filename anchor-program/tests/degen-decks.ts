@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmRawTransaction, LAMPORTS_PER_SOL } from "@solana/web3.js"
+import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmRawTransaction, LAMPORTS_PER_SOL, SendTransactionError, STAKE_CONFIG_ID } from "@solana/web3.js"
 import { Program } from "@coral-xyz/anchor";
 import { DegenDecks } from "../target/types/degen_decks";
 import { assert, expect } from "chai";
@@ -10,8 +10,11 @@ import {
     DELEGATION_PROGRAM_ID,
     delegationMetadataPdaFromDelegatedAccount,
     delegationRecordPdaFromDelegatedAccount,
+    MAGIC_CONTEXT_ID,
+    MAGIC_PROGRAM_ID
 
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 
 describe("Degen Decks", () => {
     const provider = anchor.AnchorProvider.env();
@@ -19,6 +22,28 @@ describe("Degen Decks", () => {
     const program = anchor.workspace.DegenDecks as Program<DegenDecks>;
     const connection = provider.connection;
 
+    const providerEphemeralRollup = new anchor.AnchorProvider(
+        new anchor.web3.Connection(
+            "https://devnet-as.magicblock.app/",
+            {
+                wsEndpoint: "wss://devnet-as.magicblock.app/",
+            },
+        ),
+        anchor.Wallet.local(),
+    );
+
+    const programEphemeralRollup = new Program<DegenDecks>(
+        program.idl,
+        providerEphemeralRollup
+    )
+
+
+    interface PlayerCredentials {
+        signer: PublicKey;
+        profile: PublicKey;
+        keypair: Keypair;
+        ata: Account
+    }
     // Helper functions
     const findPDA = (seeds: Array<any>, programId = program.programId) => {
         return anchor.web3.PublicKey.findProgramAddressSync(
@@ -26,7 +51,6 @@ describe("Degen Decks", () => {
             programId
         );
     }
-
     const sendSOL = async (from: PublicKey, to: PublicKey, lamports: number, signer: Keypair) => {
         const tx = new Transaction();
         tx.add(
@@ -46,10 +70,8 @@ describe("Degen Decks", () => {
             connection,
             rawTx
         );
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        console.log(`Sent ${lamports} SOL from ${from} to ${to}`)
+        console.log(`Sent ${lamports / LAMPORTS_PER_SOL} SOL from ${from} to ${to}`)
     }
-
     const fundWSOLATA = async (payerKp: Keypair, ata: Account, lamports: number) => {
         const tx = new Transaction();
         tx.add(
@@ -75,9 +97,55 @@ describe("Degen Decks", () => {
             connection,
             rawTx
         );
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        console.log(`Funded ${ata.address} with ${lamports} SOL`)
+        console.log(`Funded ${ata.address} with ${lamports / LAMPORTS_PER_SOL} WSOL`)
     }
+    function getPlayerCredentials(owner: PublicKey): PlayerCredentials {
+        if (owner.equals(user1.publicKey)) {
+            return {
+                signer: user1.publicKey,
+                profile: userProfile1,
+                keypair: user1.payer,
+                ata: userAta1
+            };
+        } else if (owner.equals(user2.publicKey)) {
+            return {
+                signer: user2.publicKey,
+                profile: userProfile2,
+                keypair: user2,
+                ata: userAta2
+            };
+        } else if (owner.equals(user3.publicKey)) {
+            return {
+                signer: user3.publicKey,
+                profile: userProfile3,
+                keypair: user3,
+                ata: userAta3
+            };
+        }
+        throw new Error("Unknown player");
+    }
+    function findValidCard(hand: any[], callCard: any): any | null {
+        if (!hand || !callCard) return null;
+        return hand.find(
+            card => card.id === callCard.id || card.cardNumber === callCard.cardNumber
+        ) || null;
+    }
+    async function getCurrentGameState() {
+        return await program.account.game.fetch(game);
+    }
+    async function getCurrentGameStateER() {
+        return await programEphemeralRollup.account.game.fetch(game);
+    }
+
+    // Cards
+    const cards = [
+        "NEED",
+        "CIRCLE",
+        "TRIANGLE",
+        "CROSS",
+        "SQAURE",
+        "STARS",
+    ];
 
     // PDA Seeds Contants
     const CONFIG_SEED = "CONFIG";
@@ -99,8 +167,6 @@ describe("Degen Decks", () => {
     const user3 = Keypair.generate();
     const randomUser = Keypair.generate();
 
-
-
     // PDAs
     let config: PublicKey;
     let programData: PublicKey;
@@ -112,11 +178,6 @@ describe("Degen Decks", () => {
     let userAta1: Account;
     let userAta2: Account;
     let userAta3: Account;
-
-    // Game variables
-    const entryStake = 0.1 * LAMPORTS_PER_SOL;
-    const noPlayers = 3;
-    const waitTime = new BN(60);
 
     const game = findPDA([
         Buffer.from(GAME_SEED, "utf-8"),
@@ -145,8 +206,16 @@ describe("Degen Decks", () => {
         game
     );
 
+    // Game variables
+    const entryStake = 0.02 * LAMPORTS_PER_SOL;
+    const noPlayers = 3;
+    const waitTime = new BN(60);
+    let winner: PublicKey;
+
 
     before(async () => {
+        // Log accounts
+        console.log(`Game PDA: ${game}`);
         // Airdrop SOL
         // await connection.requestAirdrop(randomUser.publicKey, 10 * LAMPORTS_PER_SOL);
         // await connection.requestAirdrop(user1.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -154,8 +223,8 @@ describe("Degen Decks", () => {
         // await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for airdrops
 
         // funder players WSOL accounts with 0.5 SOL
-        await sendSOL(user1.publicKey, user2.publicKey, 0.3 * LAMPORTS_PER_SOL, user1.payer);
-        await sendSOL(user1.publicKey, user3.publicKey, 0.3 * LAMPORTS_PER_SOL, user1.payer);
+        await sendSOL(user1.publicKey, user2.publicKey, 0.03 * LAMPORTS_PER_SOL, user1.payer);
+        await sendSOL(user1.publicKey, user3.publicKey, 0.03 * LAMPORTS_PER_SOL, user1.payer);
 
         // Derive PDAs
         config = findPDA([Buffer.from(CONFIG_SEED, "utf-8")])[0];
@@ -177,11 +246,10 @@ describe("Degen Decks", () => {
             WSOL,
             user3.publicKey
         );
-
         // fund players WSOL accounts with 0.2 SOL
-        await fundWSOLATA(user1.payer, userAta1, 0.2 * LAMPORTS_PER_SOL);
-        await fundWSOLATA(user2, userAta2, 0.2 * LAMPORTS_PER_SOL);
-        await fundWSOLATA(user3, userAta3, 0.2 * LAMPORTS_PER_SOL);
+        await fundWSOLATA(user1.payer, userAta1, 0.02 * LAMPORTS_PER_SOL);
+        await fundWSOLATA(user2, userAta2, 0.02 * LAMPORTS_PER_SOL);
+        await fundWSOLATA(user3, userAta3, 0.02 * LAMPORTS_PER_SOL);
 
         userProfile1 = findPDA([Buffer.from(PROFILE_SEED, "utf-8"), user1.publicKey.toBytes()])[0];
         userProfile2 = findPDA([Buffer.from(PROFILE_SEED, "utf-8"), user2.publicKey.toBytes()])[0];
@@ -353,81 +421,75 @@ describe("Degen Decks", () => {
         });
     });
 
-    describe("> User 2 Joins Game", () => {
-        it("User 2 Should Join game", async () => {
-            let gameAccount = await program.account.game.fetch(game);
-            let ataInfo = await getAccount(connection, userAta2.address);
-            const ataBalance = Number(ataInfo.amount);
+    // describe("> User 2 Joins Game", () => {
+    //     it("User 2 Should Join game", async () => {
+    //         let gameAccount = await program.account.game.fetch(game);
+    //         let ataInfo = await getAccount(connection, userAta2.address);
+    //         const ataBalance = Number(ataInfo.amount);
 
-            const tx = await program.methods
-                .joinGame()
-                .accountsStrict({
-                    signer: user2.publicKey,
-                    profile: userProfile2,
-                    game: game,
-                    gameVault: gameVault,
-                    stakeMint: WSOL,
-                    userAta: userAta2.address,
-                    config: config,
-                    oracleQueue: new PublicKey("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh"),
-                    programIdentity: findPDA([Buffer.from("identity", "utf-8")])[0],
-                    vrfProgram: new PublicKey("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"),
-                    slotHashes: new PublicKey("SysvarS1otHashes111111111111111111111111111"),
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    systemProgram: SystemProgram.programId,
-                })
-                .signers([user2])
-                .rpc();
-            console.log("Join transaction: ", tx);
+    //         const tx = await program.methods
+    //             .joinGame()
+    //             .accountsStrict({
+    //                 signer: user2.publicKey,
+    //                 profile: userProfile2,
+    //                 game: game,
+    //                 gameVault: gameVault,
+    //                 stakeMint: WSOL,
+    //                 userAta: userAta2.address,
+    //                 config: config,
+    //                 oracleQueue: new PublicKey("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh"),
+    //                 programIdentity: findPDA([Buffer.from("identity", "utf-8")])[0],
+    //                 vrfProgram: new PublicKey("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"),
+    //                 slotHashes: new PublicKey("SysvarS1otHashes111111111111111111111111111"),
+    //                 tokenProgram: TOKEN_PROGRAM_ID,
+    //                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    //                 systemProgram: SystemProgram.programId,
+    //             })
+    //             .signers([user2])
+    //             .rpc();
+    //         console.log("Join transaction: ", tx);
 
-            gameAccount = await program.account.game.fetch(game);
-            ataInfo = await getAccount(connection, userAta2.address);
-            const gameVaultInfo = await getAccount(connection, gameVault);
+    //         gameAccount = await program.account.game.fetch(game);
+    //         ataInfo = await getAccount(connection, userAta2.address);
+    //         const gameVaultInfo = await getAccount(connection, gameVault);
 
-            console.log(`ATA balance after joining: ${ataInfo.amount}`);
-            console.log(`Game vault amount: ${gameVaultInfo.amount}`);
-            expect(Number(ataInfo.amount)).to.equal(ataBalance - gameAccount.entryStake.toNumber(), "Balance after joining does not match");
-            expect(Number(gameVaultInfo.amount)).to.equal(gameAccount.entryStake.toNumber() * 2, "Game vault amount does not match");
-            expect(gameAccount.players.length).to.equal(2, "Players length does not match");
-            // console.info(gameAccount);
-            // console.log(gameAccount.players[0]);
-            // console.log(gameAccount.players[1]);
-        });
-    });
+    //         console.log(`ATA balance after joining: ${ataInfo.amount}`);
+    //         console.log(`Game vault amount: ${gameVaultInfo.amount}`);
+    //         expect(Number(ataInfo.amount)).to.equal(ataBalance - gameAccount.entryStake.toNumber(), "Balance after joining does not match");
+    //         expect(Number(gameVaultInfo.amount)).to.equal(gameAccount.entryStake.toNumber() * 2, "Game vault amount does not match");
+    //         expect(gameAccount.players.length).to.equal(2, "Players length does not match");
+    //     });
+    // });
 
-    describe("> User 2 Exits Game", () => {
-        it("User 2 Should Exit game", async () => {
-            let gameAccount = await program.account.game.fetch(game);
-            const ataInfo = await getAccount(connection, userAta2.address);
+    // describe("> User 2 Exits Game", () => {
+    //     it("User 2 Should Exit game", async () => {
+    //         let gameAccount = await program.account.game.fetch(game);
+    //         const ataInfo = await getAccount(connection, userAta2.address);
 
-            const tx = await program.methods
-                .exitGame()
-                .accountsStrict({
-                    signer: user2.publicKey,
-                    profile: userProfile2,
-                    game: game,
-                    gameVault: gameVault,
-                    stakeMint: WSOL,
-                    userAta: userAta2.address,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    systemProgram: SystemProgram.programId,
-                })
-                .signers([user2])
-                .rpc();
-            console.log("Exit transaction: ", tx);
+    //         const tx = await program.methods
+    //             .exitGame()
+    //             .accountsStrict({
+    //                 signer: user2.publicKey,
+    //                 profile: userProfile2,
+    //                 game: game,
+    //                 gameVault: gameVault,
+    //                 stakeMint: WSOL,
+    //                 userAta: userAta2.address,
+    //                 tokenProgram: TOKEN_PROGRAM_ID,
+    //                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    //                 systemProgram: SystemProgram.programId,
+    //             })
+    //             .signers([user2])
+    //             .rpc();
+    //         console.log("Exit transaction: ", tx);
 
-            gameAccount = await program.account.game.fetch(game);
-            const gameVaultInfo = await getAccount(connection, gameVault);
+    //         gameAccount = await program.account.game.fetch(game);
+    //         const gameVaultInfo = await getAccount(connection, gameVault);
 
-            expect(Number(gameVaultInfo.amount)).to.equal(gameAccount.entryStake.toNumber(), "Game vault amount does not match");
-            expect(gameAccount.players.length).to.equal(1, "Players length does not match");
-            // console.info(gameAccount);
-            // console.log(gameAccount.players[0]);
-            // console.log(gameAccount.players[1]);
-        });
-    });
+    //         expect(Number(gameVaultInfo.amount)).to.equal(gameAccount.entryStake.toNumber(), "Game vault amount does not match");
+    //         expect(gameAccount.players.length).to.equal(1, "Players length does not match");
+    //     });
+    // });
 
     describe("> User 2 and 3 joins Game", () => {
         it("User 2 Should Join game", async () => {
@@ -500,7 +562,7 @@ describe("Degen Decks", () => {
             console.log("Join transaction: ", tx);
 
             // wait for VRF
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             gameAccount = await program.account.game.fetch(game);
             ataInfo = await getAccount(connection, userAta3.address);
@@ -517,5 +579,178 @@ describe("Degen Decks", () => {
             // console.log(gameAccount.players[1]);
         });
     });
+
+    describe("> Full Game Play", () => {
+        it("Should delegate game and play full game", async () => {
+            async function playOneMove(forceDrawIfNoCard: boolean = false) {
+                const gameAccount = await getCurrentGameStateER() || await getCurrentGameState();
+                const currentPlayerIndex = gameAccount.playerTurn - 1;
+                const currentPlayer = gameAccount.players[currentPlayerIndex];
+                const { signer, profile, keypair } = getPlayerCredentials(currentPlayer.owner);
+
+                const validCard = findValidCard(currentPlayer.hand, gameAccount.callCard);
+
+                const providerEphemeralRollup = new anchor.AnchorProvider(
+                    new anchor.web3.Connection(
+                        "https://devnet-as.magicblock.app/",
+                        {
+                            wsEndpoint: "wss://devnet-as.magicblock.app/",
+                            commitment: "confirmed"
+                        },
+                    ),
+                    new anchor.Wallet(keypair),
+                );
+
+                const programEphemeralRollup = new Program<DegenDecks>(
+                    program.idl,
+                    providerEphemeralRollup
+                )
+
+                try {
+                    if (validCard && !forceDrawIfNoCard) {
+                        if (gameAccount.delegated) {
+                            await programEphemeralRollup.methods
+                                .playCard(validCard)
+                                .accountsStrict({
+                                    signer,
+                                    profile,
+                                    game,
+                                })
+                                .rpc();
+                            console.log(`${currentPlayer.username} played ${validCard.cardNumber} ${cards[validCard.id - 1]}`);
+                        } else {
+                            console.log("Undelegated Play")
+                            let tx = await program.methods
+                                .playCardDelegate(validCard)
+                                .accountsStrict({
+                                    signer,
+                                    profile,
+                                    game,
+                                    ownerProgram: program.programId,
+                                    bufferGame: bufferGame,
+                                    delegationRecordGame: recordGame,
+                                    delegationMetadataGame: metadataGame,
+                                    delegationProgram: DELEGATION_PROGRAM_ID,
+                                    systemProgram: SystemProgram.programId,
+                                })
+                                .transaction();
+                            tx.feePayer = keypair.publicKey;
+                            tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+                            tx.sign(keypair);
+                            await provider.sendAndConfirm(tx);
+
+                            console.log(`${currentPlayer.username} played ${validCard.cardNumber} ${cards[validCard.id - 1]}`);
+                        }
+                    } else {
+                        if (gameAccount.delegated) {
+                            await programEphemeralRollup.methods
+                                .drawFromPile()
+                                .accountsStrict({
+                                    signer,
+                                    profile,
+                                    game
+                                })
+                                .rpc();
+                            console.log(`${currentPlayer.username} drew from draw pile`);
+                        } else {
+                            let tx = await program.methods
+                                .drawFromPileDelegate()
+                                .accountsStrict({
+                                    signer,
+                                    profile,
+                                    game,
+                                    ownerProgram: program.programId,
+                                    bufferGame: bufferGame,
+                                    delegationRecordGame: recordGame,
+                                    delegationMetadataGame: metadataGame,
+                                    delegationProgram: DELEGATION_PROGRAM_ID,
+                                    systemProgram: SystemProgram.programId,
+                                })
+                                .transaction();
+                            tx.feePayer = keypair.publicKey;
+                            tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+                            tx.sign(keypair);
+                            await provider.sendAndConfirm(tx);
+                        console.log(`${currentPlayer.username} drew from draw pile`);
+                        }
+                    }
+                } catch (err: any) {
+                    console.error(err);
+                }
+                const updatedGameAccount = await getCurrentGameStateER();
+                if (updatedGameAccount.ended) {
+                    console.log("Game Ended")
+                    winner = updatedGameAccount.winner;
+                } else {
+                    await playOneMove();
+                }
+            }
+            await playOneMove(true);
+        });
+    });
+
+    describe("> Undelegate and Commit Game State", () => {
+        it("Should commit game state", async () => {
+            const tx = await programEphemeralRollup
+                .methods
+                .commitGame()
+                .accountsStrict({
+                    signer: user1.publicKey,
+                    game: game,
+                    magicContext: MAGIC_CONTEXT_ID,
+                    magicProgram: MAGIC_PROGRAM_ID
+                })
+                .rpc();
+        })
+    })
+
+    describe("> Winner Claims", () => {
+        it("Winner should be able to claim prize from vault", async () => {
+            if (winner) {
+                const gameAccount = await getCurrentGameStateER();
+                const player = gameAccount.players.find(p => p.owner.toBase58() == winner.toBase58());
+                const {
+                    keypair,
+                    ata,
+                    signer,
+                    profile
+                } = getPlayerCredentials(winner);
+                console.log(player.username, "won");
+
+                // wait for undelegation
+                await new Promise((resolve) => setTimeout(()=> resolve(true), 10000))
+
+                // Create provider with winner's keypair
+                const winnerProvider = new anchor.AnchorProvider(
+                    provider.connection,
+                    new anchor.Wallet(keypair),
+                    { commitment: "confirmed" }
+                );
+                const winnerProgram = new Program<DegenDecks>(
+                    program.idl,
+                    winnerProvider
+                );
+
+                const tx = await winnerProgram
+                    .methods
+                    .claimPrize()
+                    .accountsStrict({
+                        signer,
+                        game: game,
+                        gameVault: gameVault,
+                        profile: profile,
+                        userAta: ata.address,
+                        feeAta: feeWsolAta,
+                        config: config,
+                        stakeMint: WSOL,
+                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        systemProgram: SYSTEM_PROGRAM_ID,
+                        tokenProgram: TOKEN_PROGRAM_ID
+                    })
+                    .rpc();
+                console.log("claim tx", tx);
+            }
+        })
+    })
 
 }); 

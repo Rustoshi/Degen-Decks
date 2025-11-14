@@ -91,7 +91,8 @@ impl<'info> JoinGame<'info> {
             username: self.profile.username.to_owned(),
             hand: None,
             player_index: None,
-            card_count: None
+            card_count: None,
+            claimed: false
         };
         self.game.players.push(player_account);
         Ok(())

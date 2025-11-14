@@ -53,13 +53,9 @@ pub struct ClaimPrize<'info> {
     )]
     pub user_ata: InterfaceAccount<'info, TokenAccount>,
     #[account(
-        init_if_needed,
-        payer = signer,
-        associated_token::mint = stake_mint,
-        associated_token::authority = config,
-        associated_token::token_program = token_program
+        mut
     )]
-    pub config_ata: InterfaceAccount<'info, TokenAccount>,
+    pub fee_ata: InterfaceAccount<'info, TokenAccount>,
     #[account(
         seeds = [
             &CONFIG_SEED.as_bytes()
@@ -75,12 +71,11 @@ pub struct ClaimPrize<'info> {
 
 impl<'info> ClaimPrize<'info> {
     pub fn claim_prize(&mut self) -> Result<()> {
-        // check if user is in the list
-         require!(
-            self.game.players.iter().any(|player| player.owner == self.signer.key()),
-            GameErrors::PlayerNotFound
-        );
         require!(self.game.ended == true, GameErrors::GameNotEnded);
+        // check if player has claimed
+        let player_index = self.game.players.iter().position(|p| p.owner == self.signer.key()).ok_or(GameErrors::PlayerNotFound)?;
+        require!(self.game.players[player_index].claimed == false, GameErrors::AlreadyClaimed);
+        require!(self.fee_ata.owner == self.config.fee_wallet, GameErrors::InvalidAuthority);
 
 
         let game_seed =  self.game.seed.to_le_bytes();
@@ -109,16 +104,14 @@ impl<'info> ClaimPrize<'info> {
             // transfer fee
             spl_transfer(
                 self.game_vault.to_account_info(), 
-                self.config_ata.to_account_info(), 
+                self.fee_ata.to_account_info(), 
                 self.game.to_account_info(), 
                 self.token_program.to_account_info(), 
                 fee_amount, 
                 Some(signer_seeds)
             )?;
-            // remove player from game
-            if let Some(index) = self.game.players.iter().position(|p| p.owner == self.signer.key()) {
-                self.game.players.remove(index);
-            }
+            // mark player as claimed
+            self.game.players[player_index].claimed = true;
         }
         else if winner.is_none() {
             let amount = self.game.entry_stake;
@@ -131,12 +124,9 @@ impl<'info> ClaimPrize<'info> {
                 Some(signer_seeds)
             )?;
 
-            // remove player from game
-            if let Some(index) = self.game.players.iter().position(|p| p.owner == self.signer.key()) {
-                self.game.players.remove(index);
-            }
+            // mark player as claimed
+            self.game.players[player_index].claimed = true;
         }
-
         Ok(())
     }
 }

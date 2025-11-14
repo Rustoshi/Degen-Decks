@@ -10,6 +10,7 @@ use crate::{
     }, 
     errors::GameErrors, 
     state::{
+        Card, 
         Game, 
         Profile
     }
@@ -18,7 +19,7 @@ use crate::{
 
 #[delegate]
 #[derive(Accounts)]
-pub struct PenalizeOpponent<'info> {
+pub struct PlayCardDelegate<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
@@ -42,16 +43,17 @@ pub struct PenalizeOpponent<'info> {
     game: Account<'info, Game>
 }
 
-impl<'info> PenalizeOpponent<'info> {
-    pub fn penalize_opponent(&mut self) -> Result<()> {
+impl<'info> PlayCardDelegate<'info> {
+    pub fn play_card_delegate(&mut self, card: Card) -> Result<()> {
         let player = self.game.players.iter().find(|p| p.owner == self.signer.key()).ok_or(GameErrors::PlayerNotFound)?;
         
-        require!(player.player_index != Some(self.game.player_turn), GameErrors::CannotPenalizeYourself);
+        require!(player.player_index == Some(self.game.player_turn), GameErrors::NotYourTurn);
         require!(self.game.started == true, GameErrors::GameNotStarted);
         require!(self.game.ended == false, GameErrors::GameEnded);
 
         self.game.last_move_time = Some(Clock::get()?.unix_timestamp);
-        self.game.handle_penalize_opponent()?;
+        self.game.validate_play(&card)?;
+        self.game.handle_call_card()?;
 
         if !self.game.delegated && !self.game.ended {
             self.game.delegated = true;

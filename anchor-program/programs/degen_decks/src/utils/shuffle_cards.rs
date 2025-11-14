@@ -6,8 +6,7 @@ use crate::constants::{
     TRIANGLE,
     SQUARE,
     CROSS,
-    STAR,
-    WHOT
+    STAR
 };
 
 
@@ -27,7 +26,7 @@ pub fn get_card_array<const N: usize>(id: u8, cards: [u8; N]) -> [Card; N] {
 
 pub fn shuffle_cards(random_seed: u64) -> Vec<Card> {
     let mut full_deck: Vec<Card> = Vec::new();
-    full_deck.extend_from_slice(&get_card_array(1, WHOT));
+    // full_deck.extend_from_slice(&get_card_array(1, WHOT));
     full_deck.extend_from_slice(&get_card_array(2, CIRCLE));
     full_deck.extend_from_slice(&get_card_array(3, TRIANGLE));
     full_deck.extend_from_slice(&get_card_array(4, CROSS));

@@ -16,8 +16,14 @@ pub use exit_game::*;
 pub mod play_card;
 pub use play_card::*;  
 
+pub mod play_card_delegate;
+pub use play_card_delegate::*;  
+
 pub mod draw_from_pile;
 pub use draw_from_pile::*;
+
+pub mod draw_from_pile_delegate;
+pub use draw_from_pile_delegate::*;
 
 pub mod claim_prize;
 pub use claim_prize::*;
@@ -27,3 +33,6 @@ pub use penalize_opponent::*;
 
 pub mod consume_randomness;
 pub use consume_randomness::*;
+
+pub mod commit_game;
+pub use commit_game::*;

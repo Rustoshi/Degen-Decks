@@ -96,7 +96,8 @@ impl<'info> InitializeGame<'info> {
             username: self.profile.username.to_owned(),
             hand: None,
             card_count: None,
-            player_index: None
+            player_index: None,
+            claimed: false
         };
 
         // update game state

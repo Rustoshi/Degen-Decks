@@ -1,9 +1,4 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::{
-    anchor::{commit, delegate}, 
-    cpi::DelegateConfig, 
-    ephem::commit_and_undelegate_accounts
-};
 use crate::{
     constants::{
         GAME_SEED, 
@@ -16,8 +11,6 @@ use crate::{
     }
 };
 
-#[commit]
-#[delegate]
 #[derive(Accounts)]
 pub struct DrawFromPile<'info> {
     #[account(mut)]
@@ -32,7 +25,6 @@ pub struct DrawFromPile<'info> {
     pub profile: Account<'info, Profile>,
     #[account(
         mut,
-        del,
         seeds = [
             &GAME_SEED.as_bytes(), 
             game.seed.to_le_bytes().as_ref(), 
@@ -53,39 +45,6 @@ impl<'info> DrawFromPile<'info> {
 
         self.game.last_move_time = Some(Clock::get()?.unix_timestamp);
         self.game.handle_draw_from_pile()?;
-        self.game.check_winner()?;
-
-
-        if self.game.ended && self.game.delegated {
-            self.game.delegated = false;
-            self.game.exit(&crate::ID)?;
-
-            // commit and undelegate
-            commit_and_undelegate_accounts(
-                &self.signer,
-                vec![&self.game.to_account_info()],
-                &self.magic_context,
-                &self.magic_program,
-            )?;
-        }
-
-        else if !self.game.delegated && !self.game.ended {
-            self.game.delegated = true;
-            self.game.exit(&crate::ID)?;
-
-            self.delegate_game(
-                &self.signer,
-                &[
-                    &GAME_SEED.as_bytes(), 
-                    self.game.seed.to_le_bytes().as_ref(), 
-                    self.game.owner.as_ref(),
-                    &[self.game.bump]
-                ],
-                DelegateConfig {
-                    ..Default::default()
-                }
-            )?;
-        }
 
         Ok(())
     }

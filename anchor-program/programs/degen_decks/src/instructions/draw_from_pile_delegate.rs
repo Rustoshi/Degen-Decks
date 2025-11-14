@@ -15,10 +15,9 @@ use crate::{
     }
 };
 
-
 #[delegate]
 #[derive(Accounts)]
-pub struct PenalizeOpponent<'info> {
+pub struct DrawFromPileDelegate<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
@@ -42,16 +41,17 @@ pub struct PenalizeOpponent<'info> {
     game: Account<'info, Game>
 }
 
-impl<'info> PenalizeOpponent<'info> {
-    pub fn penalize_opponent(&mut self) -> Result<()> {
+impl<'info> DrawFromPileDelegate<'info> {
+    pub fn draw_from_pile_delegate(&mut self) -> Result<()> {
         let player = self.game.players.iter().find(|p| p.owner == self.signer.key()).ok_or(GameErrors::PlayerNotFound)?;
         
-        require!(player.player_index != Some(self.game.player_turn), GameErrors::CannotPenalizeYourself);
+        require!(player.player_index == Some(self.game.player_turn), GameErrors::NotYourTurn);
         require!(self.game.started == true, GameErrors::GameNotStarted);
         require!(self.game.ended == false, GameErrors::GameEnded);
 
         self.game.last_move_time = Some(Clock::get()?.unix_timestamp);
-        self.game.handle_penalize_opponent()?;
+        self.game.handle_draw_from_pile()?;
+
 
         if !self.game.delegated && !self.game.ended {
             self.game.delegated = true;

@@ -34,4 +34,8 @@ pub enum GameErrors{
     YouAreNotWinner,
     #[msg("Cannot penalize yourself")]
     CannotPenalizeYourself,
+    #[msg("Already claimed")]
+    AlreadyClaimed,
+    #[msg("Invalid authority")]
+    InvalidAuthority
 }
